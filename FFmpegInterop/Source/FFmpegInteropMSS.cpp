@@ -659,7 +659,7 @@ void FFmpegInteropMSS::OnStarting(MediaStreamSource ^sender, MediaStreamSourceSt
 			// Convert TimeSpan unit to AV_TIME_BASE
 			int64_t seekTarget = static_cast<int64_t>(request->StartPosition->Value.Duration / (av_q2d(avFormatCtx->streams[streamIndex]->time_base) * 10000000));
 
-			if (av_seek_frame(avFormatCtx, streamIndex, seekTarget, 0) < 0)
+			if (av_seek_frame(avFormatCtx, streamIndex, seekTarget, AVSEEK_FLAG_ANY | AVSEEK_FLAG_BACKWARD) < 0)
 			{
 				DebugMessage(L" - ### Error while seeking\n");
 			}
@@ -714,12 +714,23 @@ static int FileStreamRead(void* ptr, uint8_t* buf, int bufSize)
 {
 	IStream* pStream = reinterpret_cast<IStream*>(ptr);
 	ULONG bytesRead = 0;
-	HRESULT hr = pStream->Read(buf, bufSize, &bytesRead);
 
-	if (FAILED(hr))
+	uint8_t* temp = new uint8_t[bufSize];
+	if (temp == nullptr)
 	{
 		return -1;
 	}
+
+	HRESULT hr = pStream->Read(temp, bufSize, &bytesRead);
+
+	if (FAILED(hr))
+	{
+		free(temp);
+		return -1;
+	}
+
+	memcpy(buf, temp, bytesRead);
+	free(temp);
 
 	// If we succeed but don't have any bytes, assume end of file
 	if (bytesRead == 0)
